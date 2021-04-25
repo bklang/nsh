@@ -92,12 +92,21 @@ intcarp(char *ifname, int ifs, int argc, char **argv)
 	switch(x->type) {
 	case CARP_ADVSKEW:
 	case CARP_ADVBASE:
+		if (set) {
+			errno = 0;
+			val = strtonum(argv[0], 0, 254, &errmsg);
+			if (errmsg) {
+				printf("%% %s value out of range: %s\n", x->name, errmsg);
+				return(0);
+			}
+		}
+		break;
 	case CARP_VHID:
 		if (set) {
 			errno = 0;
 			val = strtonum(argv[0], 0, 255, &errmsg);
 			if (errmsg) {
-				printf("%% %s value out of range: %s\n",  x->name, errmsg);
+				printf("%% %s value out of range: %s\n", x->name, errmsg);
 				return(0);
 			}
 		}
@@ -215,10 +224,12 @@ intcpass(char *ifname, int ifs, int argc, char **argv)
 		printf("%% intpass: SIOCGVH: %s\n", strerror(errno));
 		return (0);
 	}
-	if (set)
+	if (set) {
+		bzero(creq.carpr_key, CARP_KEY_LEN);
 		strlcpy(creq.carpr_key, argv[0], CARP_KEY_LEN);
-	else
+	} else {
 		bzero((char *)&creq.carpr_key, sizeof(creq.carpr_key));
+	}
 
 	if (ioctl(ifs, SIOCSVH, (caddr_t) & ifr) == -1)
 		printf("%% intcpass: SIOCSVH: %s\n", strerror(errno));
@@ -333,7 +344,7 @@ conf_carp(FILE *output, int s, char *ifname)
 	if (creq.carpr_carpdev[0] != '\0')
 		fprintf(output, " carpdev %s\n", creq.carpr_carpdev);
 	if (creq.carpr_key[0] != '\0')
-		fprintf(output, " cpass %s\n", creq.carpr_key);
+		fprintf(output, " carppass %s\n", creq.carpr_key);
 	if (creq.carpr_advbase != CARP_DFLTINTV)
 		fprintf(output, " advbase %i\n", creq.carpr_advbase);
 	if (creq.carpr_vhids[0] != 0)
@@ -412,46 +423,3 @@ carp_state(int s, char *ifname)
 			
 	return(0);
 }
-
-int
-intcdev(char *ifname, int ifs, int argc, char **argv) 
-{
-	struct ifreq ifr;
-	struct carpreq creq;
-	int set;
-		
-	if (NO_ARG(argv[0])) {
-		set = 0;
-		argc--;
-		argv++;
-	} else
-		set = 1;
-
-	argc--;
-	argv++;
-
-	if ((!set && argc > 1) || (set && argc != 1)) {
-		printf("%% carpdev <carpdev>\n");
-		printf("%% no carpdev\n");
-		return (0);
-	}
-
-	bzero((char *) &creq, sizeof(struct carpreq));
-	ifr.ifr_data = (caddr_t) & creq;
-	strlcpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name));
-
-	if (ioctl(ifs, SIOCGVH, (caddr_t) & ifr) == -1) {
-		printf("%% intcdev: SIOCGVH: %s\n", strerror(errno));
-		return (0);
-	}
-	if (set)
-		strlcpy(creq.carpr_carpdev, argv[0], sizeof(creq.carpr_carpdev));
-	else
-		bzero((char *)&creq.carpr_carpdev, sizeof(creq.carpr_carpdev));
-
-	if (ioctl(ifs, SIOCSVH, (caddr_t) & ifr) == -1)
-		printf("%% intcdev: SIOCSVH: %s\n", strerror(errno));
-
-	return (0);
-}
-
